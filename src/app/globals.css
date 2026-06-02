@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+:root {
+  --background: #FDFBF6; /* Cozy Warm Ivory */
+  --foreground: #292524; /* Warm Stone 800 */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-noto-sans-kr), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+  background: #FDFBF6 !important;
+  color: #292524 !important;
+  font-family: var(--font-sans);
+  overflow: hidden; /* Prevent native scrollbars for a clean canvas view */
+}
+
+/* Polka dot or grid pattern for board canvas */
+.board-bg {
+  --distance: 20px;
+  --radius: 1px;
+  --dot-color: rgba(139, 92, 26, 0.09); /* Soft warm brown dots */
+  --bg-color: #FDFBF6 !important;
+  --polka: radial-gradient(circle, var(--dot-color) var(--radius), transparent calc(var(--radius) + 0.5px));
+  background: var(--polka) 0 0, var(--polka) var(--distance) var(--distance) var(--bg-color) !important;
+  background-size: calc(var(--distance) * 2) calc(var(--distance) * 2) !important;
+}
+
+/* Custom shadow filters for SVG shapes - softer, warmer tone */
+.svg-shadow {
+  filter: drop-shadow(0 4px 6px rgba(120, 90, 60, 0.08)) drop-shadow(0 10px 15px rgba(120, 90, 60, 0.06));
+}
+
+.svg-shadow-active {
+  filter: drop-shadow(0 10px 15px rgba(120, 90, 60, 0.15)) drop-shadow(0 20px 25px rgba(120, 90, 60, 0.1));
+}
+
