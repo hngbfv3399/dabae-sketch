@@ -181,6 +181,108 @@ function MemoBoardCanvas({
     window.addEventListener("pointerup", handlePointerUp);
   };
 
+  // 모바일 터치 이벤트 핸들러 (싱글 터치 Pan, 듀얼 터치 Pinch Zoom)
+  const touchStartRef = useRef<{
+    touches: { clientX: number; clientY: number }[];
+    initialPan: { x: number; y: number };
+    initialZoom: number;
+    initialDistance: number;
+    initialMidpoint: { x: number; y: number };
+  } | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // 메모 카드 또는 버튼 클릭 시에는 배경 터치 작동 방지
+    if (
+      e.target !== e.currentTarget && 
+      !(e.target as HTMLElement).classList.contains("board-bg-element")
+    ) {
+      return;
+    }
+
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      touchStartRef.current = {
+        touches: [{ clientX: touch.clientX, clientY: touch.clientY }],
+        initialPan: { ...panRef.current },
+        initialZoom: zoomRef.current,
+        initialDistance: 0,
+        initialMidpoint: { x: 0, y: 0 },
+      };
+    } else if (e.touches.length === 2) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const midpoint = {
+        x: (t1.clientX + t2.clientX) / 2,
+        y: (t1.clientY + t2.clientY) / 2,
+      };
+
+      touchStartRef.current = {
+        touches: [
+          { clientX: t1.clientX, clientY: t1.clientY },
+          { clientX: t2.clientX, clientY: t2.clientY },
+        ],
+        initialPan: { ...panRef.current },
+        initialZoom: zoomRef.current,
+        initialDistance: dist,
+        initialMidpoint: midpoint,
+      };
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+
+    if (e.touches.length === 1 && touchStartRef.current.touches.length === 1) {
+      const touch = e.touches[0];
+      const startTouch = touchStartRef.current.touches[0];
+      const dx = touch.clientX - startTouch.clientX;
+      const dy = touch.clientY - startTouch.clientY;
+
+      setPan({
+        x: touchStartRef.current.initialPan.x + dx,
+        y: touchStartRef.current.initialPan.y + dy,
+      });
+    } else if (e.touches.length === 2 && touchStartRef.current.touches.length === 2) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      
+      if (touchStartRef.current.initialDistance > 0 && dist > 0) {
+        const factor = dist / touchStartRef.current.initialDistance;
+        const nextZoom = Math.max(0.4, Math.min(2.0, touchStartRef.current.initialZoom * factor));
+        
+        const midpoint = {
+          x: (t1.clientX + t2.clientX) / 2,
+          y: (t1.clientY + t2.clientY) / 2,
+        };
+
+        const container = containerRef.current;
+        if (container) {
+          const rect = container.getBoundingClientRect();
+          const mx = midpoint.x - rect.left;
+          const my = midpoint.y - rect.top;
+
+          const mxInit = touchStartRef.current.initialMidpoint.x - rect.left;
+          const myInit = touchStartRef.current.initialMidpoint.y - rect.top;
+
+          const xs = (mxInit - touchStartRef.current.initialPan.x) / touchStartRef.current.initialZoom;
+          const ys = (myInit - touchStartRef.current.initialPan.y) / touchStartRef.current.initialZoom;
+
+          setZoom(nextZoom);
+          setPan({
+            x: mx - xs * nextZoom,
+            y: my - ys * nextZoom,
+          });
+        }
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    touchStartRef.current = null;
+  };
+
   // 칠판 전체 고해상도 PNG 이미지 저장
   const handleSaveImage = async () => {
     if (isCapturing) return;
@@ -348,15 +450,29 @@ function MemoBoardCanvas({
       )}
 
       {/* 최상단 헤더 (제목, 상태 정보, 검색 및 필터) */}
-      <header className="absolute top-0 inset-x-0 z-30 flex flex-col md:flex-row md:items-center justify-between gap-3 px-6 py-4 bg-white/45 backdrop-blur-md border-b border-stone-200/50 shadow-xs">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-black tracking-tight text-transparent bg-clip-text bg-linear-to-r from-amber-600 to-rose-500">
+      <header className="absolute top-0 inset-x-0 z-30 flex flex-col md:flex-row md:items-center justify-between gap-2.5 px-4 md:px-6 py-3 md:py-4 bg-white/45 backdrop-blur-md border-b border-stone-200/50 shadow-xs">
+        <div className="flex items-center justify-between w-full md:w-auto gap-3">
+          <h1 className="text-lg md:text-xl font-black tracking-tight text-transparent bg-clip-text bg-linear-to-r from-amber-600 to-rose-500">
             담빵메모지
           </h1>
+          {/* 모바일 전용 연결 상태 배지 */}
+          <div className="md:hidden">
+            {isConvexConnected ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/50">
+                <Wifi className="w-3 h-3" />
+                정상
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200/60 animate-pulse">
+                <WifiOff className="w-3 h-3" />
+                문제
+              </span>
+            )}
+          </div>
         </div>
 
         {/* 실시간 검색 및 필터 */}
-        <div className="flex items-center gap-2 self-center md:self-auto w-full md:w-auto max-w-md">
+        <div className="flex items-center gap-2 w-full md:w-auto max-w-md">
           <input
             type="text"
             placeholder="작성자 또는 내용 검색..."
@@ -367,7 +483,7 @@ function MemoBoardCanvas({
           <select
             value={shapeFilter}
             onChange={(e: any) => setShapeFilter(e.target.value)}
-            className="bg-white/80 border border-stone-200/80 rounded-xl px-3 py-1.5 text-stone-700 text-sm font-semibold focus:outline-none focus:border-amber-500/80 transition-all cursor-pointer shadow-xs"
+            className="bg-white/80 border border-stone-200/80 rounded-xl px-3 py-1.5 text-stone-700 text-sm font-semibold focus:outline-none focus:border-amber-500/80 transition-all cursor-pointer shadow-xs shrink-0"
           >
             <option value="all">도형 전체</option>
             <option value="square">■ 네모</option>
@@ -377,8 +493,8 @@ function MemoBoardCanvas({
           </select>
         </div>
 
-        {/* 연결 상태 배지 */}
-        <div className="flex items-center gap-2 self-end md:self-auto">
+        {/* 데스크톱 전용 연결 상태 배지 */}
+        <div className="hidden md:flex items-center gap-2 self-end md:self-auto">
           {isConvexConnected ? (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/50">
               <Wifi className="w-3.5 h-3.5" />
@@ -395,7 +511,7 @@ function MemoBoardCanvas({
 
       {/* 안내 배너 */}
       {showBanner && !isConvexConnected && (
-        <div className="absolute top-20 inset-x-4 z-30 flex items-center justify-between bg-linear-to-r from-amber-50/95 to-orange-100/95 border border-amber-200/60 text-amber-800 text-xs px-4 py-3 rounded-2xl shadow-md backdrop-blur-md">
+        <div className="absolute top-24 md:top-20 inset-x-4 z-30 flex items-center justify-between bg-linear-to-r from-amber-50/95 to-orange-100/95 border border-amber-200/60 text-amber-800 text-xs px-4 py-3 rounded-2xl shadow-md backdrop-blur-md">
           <div className="flex items-center gap-2">
             <Info className="w-4 h-4 text-amber-600 shrink-0" />
             <p>
@@ -417,7 +533,10 @@ function MemoBoardCanvas({
       <div
         ref={containerRef}
         onPointerDown={handleBgPointerDown}
-        className="w-full h-full overflow-hidden relative cursor-grab active:cursor-grabbing board-bg-element"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className="w-full h-full overflow-hidden relative cursor-grab active:cursor-grabbing board-bg-element touch-none"
       >
         {/* 대형 보드판 자체 (scale 및 translate 적용) */}
         <div
