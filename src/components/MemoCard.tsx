@@ -208,7 +208,7 @@ export default function MemoCard({
         style={{ backgroundColor: color }}
       />
     );
-    textContainerClass = "absolute inset-0 p-7 pb-6 flex flex-col justify-between items-center text-center";
+    textContainerClass = "absolute inset-0 pt-10 pb-8 px-8 flex flex-col justify-between items-center text-center";
   } else if (shape === "apple") {
     shapeContent = (
       <div className="w-full h-full relative" style={{ color }}>
@@ -219,7 +219,7 @@ export default function MemoCard({
         </svg>
       </div>
     );
-    textContainerClass = "absolute inset-x-0 bottom-0 top-[28%] px-5 pb-2 pt-1 flex flex-col justify-between text-slate-800";
+    textContainerClass = "absolute left-[16%] right-[16%] top-[35%] bottom-[12%] flex flex-col justify-between items-center text-center text-slate-800";
   } else if (shape === "heart") {
     shapeContent = (
       <div className="w-full h-full relative" style={{ color }}>
@@ -228,11 +228,16 @@ export default function MemoCard({
         </svg>
       </div>
     );
-    textContainerClass = "absolute inset-0 pt-6 pb-2 px-6 flex flex-col justify-between items-center text-center text-slate-800";
+    textContainerClass = "absolute left-[18%] right-[18%] top-[25%] bottom-[20%] flex flex-col justify-between items-center text-center text-slate-800";
   }
 
   // 표시할 리액션이 있는지 체크
   const hasReactions = reactions && Object.values(reactions).some((val) => val > 0);
+
+  const isSquare = shape === "square";
+  const textAlignmentClass = isSquare ? "text-left" : "text-center";
+  const authorAlignmentClass = isSquare ? "text-right" : "text-center";
+  const reactionsAlignmentClass = isSquare ? "" : "justify-center";
 
   return (
     <div
@@ -303,7 +308,7 @@ export default function MemoCard({
 
         {/* 메모 내용 표시 (수정 불가) */}
         <div
-          className="w-full grow text-slate-800 font-semibold leading-snug text-[13.5px] overflow-y-auto scrollbar-none select-text cursor-text pr-0.5 text-left"
+          className={`w-full grow text-slate-800 font-semibold leading-snug text-[13.5px] overflow-y-auto scrollbar-none select-text cursor-text pr-0.5 ${textAlignmentClass}`}
           style={{
             wordBreak: "break-all",
           }}
@@ -313,7 +318,7 @@ export default function MemoCard({
 
         {/* 누적된 리액션 배지 렌더링 (리액션 존재 시) */}
         {hasReactions && (
-          <div className="flex flex-wrap gap-1 mt-1.5 w-full max-h-[36px] overflow-y-auto scrollbar-none z-10">
+          <div className={`flex flex-wrap gap-1 mt-1.5 w-full max-h-[36px] overflow-y-auto scrollbar-none z-10 ${reactionsAlignmentClass}`}>
             {EMOJI_LIST.map(({ type, emoji }) => {
               const count = reactions?.[type] || 0;
               if (count === 0) return null;
@@ -332,7 +337,7 @@ export default function MemoCard({
         )}
 
         {/* 작성자 태그 */}
-        <div className="w-full text-right mt-1 shrink-0 z-10">
+        <div className={`w-full ${authorAlignmentClass} mt-1 shrink-0 z-10`}>
           <span className="text-[10px] font-semibold text-slate-700/60 bg-black/5 px-2 py-0.5 rounded-full select-none">
             👤 {author || "익명"}
           </span>
