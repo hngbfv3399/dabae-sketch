@@ -28,6 +28,9 @@ interface MemoCardProps {
   isDimmed?: boolean;
   zoom: number;
   pan: { x: number; y: number };
+  isDraggingBy?: string;
+  currentUser: string;
+  onUpdateDraggingState?: (id: string, isDraggingBy?: string) => void;
 }
 
 const EMOJI_LIST = [
@@ -64,6 +67,9 @@ export default function MemoCard({
   isDimmed,
   zoom,
   pan,
+  isDraggingBy,
+  currentUser,
+  onUpdateDraggingState,
 }: MemoCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -91,9 +97,15 @@ export default function MemoCard({
       return;
     }
 
+    // 누군가 이미 만지고 있다면 드래그 잠금
+    if (isDraggingBy && isDraggingBy !== currentUser) {
+      return;
+    }
+
     e.preventDefault();
     setIsDragging(true);
     onActivate?.(id); // 현재 메모를 활성화 상태로 만듬 (z-index 향상)
+    onUpdateDraggingState?.(id, currentUser); // 실시간 드래그 시작 알림
     
     if (cardRef.current) {
       const parent = cardRef.current.parentElement;
@@ -239,26 +251,37 @@ export default function MemoCard({
   const authorAlignmentClass = isSquare ? "text-right" : "text-center";
   const reactionsAlignmentClass = isSquare ? "" : "justify-center";
 
+  const isDraggedByOther = isDraggingBy && isDraggingBy !== currentUser;
+  const cursorClass = isDraggedByOther ? "cursor-not-allowed" : isDragging ? "cursor-grabbing" : "cursor-grab";
+
   return (
     <div
       ref={cardRef}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp} // 모바일 터치 이탈/취소 대응
       className={`absolute w-[180px] h-[180px] group select-none touch-none transition-all duration-150 ${
         isDimmed ? "opacity-20 pointer-events-none" : ""
       } ${
         isDragging
-          ? "z-50 cursor-grabbing shadow-xl scale-[1.03]"
+          ? "z-50 shadow-xl scale-[1.03]"
           : isActive
-          ? "z-30 cursor-grab shadow-md scale-[1.01]"
-          : "z-10 cursor-grab hover:z-20 hover:shadow-md"
-      }`}
+          ? "z-30 shadow-md scale-[1.01]"
+          : "z-10 hover:z-20 hover:shadow-md"
+      } ${cursorClass} ${isDraggedByOther ? "ring-3 ring-rose-400 shadow-lg scale-[0.98]" : ""}`}
       style={{
         transform: `translate3d(${localPos.x}px, ${localPos.y}px, 0) rotate(${rotation}deg)`,
-        transition: isDragging ? "none" : "transform 0.15s ease-out, shadow 0.15s ease-out",
+        transition: isDragging || isDraggedByOther ? "none" : "transform 0.15s ease-out, shadow 0.15s ease-out",
       }}
     >
+      {/* 타인 조작 중 인디케이터 배지 */}
+      {isDraggedByOther && (
+        <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-rose-500 text-white text-[9.5px] font-black px-2 py-0.5 rounded-full shadow-md whitespace-nowrap animate-bounce z-40 select-none">
+          ✍️ {isDraggingBy} 조작 중
+        </div>
+      )}
+
       {/* 백그라운드 도형 */}
       {shapeContent}
 
@@ -308,7 +331,9 @@ export default function MemoCard({
 
         {/* 메모 내용 표시 (수정 불가) */}
         <div
-          className={`w-full grow text-slate-800 font-semibold leading-snug text-[13.5px] overflow-y-auto scrollbar-none select-text cursor-text pr-0.5 ${textAlignmentClass}`}
+          className={`w-full grow text-slate-800 font-semibold leading-snug text-[13.5px] overflow-y-auto scrollbar-none select-text cursor-text pr-0.5 ${textAlignmentClass} ${
+            isActive && !isDraggedByOther ? "" : "pointer-events-none"
+          }`}
           style={{
             wordBreak: "break-all",
           }}

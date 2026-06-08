@@ -7,6 +7,7 @@ import { api } from "../../convex/_generated/api";
 import MemoCard, { ReactionType } from "./MemoCard";
 import ActionBar from "./ActionBar";
 import { Info, Wifi, WifiOff } from "lucide-react";
+import { encrypt, decrypt } from "../utils/crypto";
 
 // 프리셋 파스텔 색상 정의 (어두운 색 배제)
 const PASTEL_COLORS = [
@@ -37,6 +38,7 @@ interface Note {
     laugh: number;
     fire: number;
   };
+  isDraggingBy?: string; // 실시간 조작 중인 사용자명
 }
 
 interface MemoBoardCanvasProps {
@@ -46,6 +48,8 @@ interface MemoBoardCanvasProps {
   onDelete: (id: string, password?: string) => void;
   onReact: (id: string, reactionType: ReactionType) => void;
   isConvexConnected: boolean;
+  onUpdateDraggingState: (id: string, isDraggingBy?: string) => void;
+  currentUser: string;
 }
 
 // 1. 공통 캔버스 렌더러 컴포넌트
@@ -56,6 +60,8 @@ function MemoBoardCanvas({
   onDelete,
   onReact,
   isConvexConnected,
+  onUpdateDraggingState,
+  currentUser,
 }: MemoBoardCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [showBanner, setShowBanner] = useState(true);
@@ -360,12 +366,12 @@ function MemoBoardCanvas({
   };
 
   // 검색어 필터링 검증
-  const isCardDimmed = (note: Note) => {
+  const isCardDimmed = (note: Note, decryptedText: string) => {
     const query = searchQuery.trim().toLowerCase();
     
     // 1. 검색어 확인 (닉네임 혹은 본문 매칭)
     const searchMatch = !query || 
-      note.text.toLowerCase().includes(query) || 
+      decryptedText.toLowerCase().includes(query) || 
       note.author.toLowerCase().includes(query);
 
     // 2. 모양 확인
@@ -559,27 +565,33 @@ function MemoBoardCanvas({
             </div>
           ) : (
             // 메모 리스트 렌더링
-            notes.map((note) => (
-              <MemoCard
-                key={note._id}
-                id={note._id}
-                text={note.text}
-                x={note.x}
-                y={note.y}
-                color={note.color}
-                shape={note.shape}
-                author={note.author}
-                reactions={note.reactions}
-                onUpdatePosition={onUpdatePosition}
-                onDelete={handleDeleteClick} // 모달 팝업 삭제 핸들러로 변경
-                onReact={onReact}
-                isActive={activeCardId === note._id}
-                onActivate={(id) => setActiveCardId(id)}
-                isDimmed={isCardDimmed(note)}
-                zoom={zoom}
-                pan={pan}
-              />
-            ))
+            notes.map((note) => {
+              const decryptedText = decrypt(note.text);
+              return (
+                <MemoCard
+                  key={note._id}
+                  id={note._id}
+                  text={decryptedText}
+                  x={note.x}
+                  y={note.y}
+                  color={note.color}
+                  shape={note.shape}
+                  author={note.author}
+                  reactions={note.reactions}
+                  onUpdatePosition={onUpdatePosition}
+                  onDelete={handleDeleteClick} // 모달 팝업 삭제 핸들러로 변경
+                  onReact={onReact}
+                  isActive={activeCardId === note._id}
+                  onActivate={(id) => setActiveCardId(id)}
+                  isDimmed={isCardDimmed(note, decryptedText)}
+                  zoom={zoom}
+                  pan={pan}
+                  isDraggingBy={note.isDraggingBy}
+                  currentUser={currentUser}
+                  onUpdateDraggingState={onUpdateDraggingState}
+                />
+              );
+            })
           )}
         </div>
       </div>
@@ -630,6 +642,20 @@ function ConvexMemoBoard() {
   const updatePosition = useMutation(api.notes.updatePosition);
   const deleteNote = useMutation(api.notes.remove);
   const addReaction = useMutation(api.notes.addReaction);
+  const updateDraggingState = useMutation(api.notes.updateDraggingState);
+
+  const [currentUser, setCurrentUser] = useState("익명");
+  useEffect(() => {
+    const handleUpdateUser = () => {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("memo_author") || "익명";
+        setCurrentUser(stored);
+      }
+    };
+    handleUpdateUser();
+    const interval = setInterval(handleUpdateUser, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleAddNote = (
     shape: "square" | "circle" | "apple" | "heart",
@@ -641,7 +667,7 @@ function ConvexMemoBoard() {
     password?: string
   ) => {
     createNote({
-      text,
+      text: encrypt(text), // 암호화하여 저장
       x,
       y,
       color,
@@ -663,6 +689,10 @@ function ConvexMemoBoard() {
     addReaction({ id: id as any, reactionType });
   };
 
+  const handleUpdateDraggingState = (id: string, isDraggingBy?: string) => {
+    updateDraggingState({ id: id as any, isDraggingBy });
+  };
+
   return (
     <MemoBoardCanvas
       notes={notes as any}
@@ -671,6 +701,8 @@ function ConvexMemoBoard() {
       onDelete={handleDelete}
       onReact={handleReact}
       isConvexConnected={true}
+      onUpdateDraggingState={handleUpdateDraggingState}
+      currentUser={currentUser}
     />
   );
 }
@@ -678,6 +710,20 @@ function ConvexMemoBoard() {
 // 3. 로컬 저장소 백업용 단독 컴포넌트 (Convex 비활성화 상태용)
 function LocalMemoBoard() {
   const [notes, setNotes] = useState<Note[]>([]);
+  const [currentUser, setCurrentUser] = useState("익명");
+
+  // 현재 사용자 이름 주기적 로드
+  useEffect(() => {
+    const handleUpdateUser = () => {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("memo_author") || "익명";
+        setCurrentUser(stored);
+      }
+    };
+    handleUpdateUser();
+    const interval = setInterval(handleUpdateUser, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // 초기 렌더링 시 로컬스토리지에서 복원
   useEffect(() => {
@@ -685,17 +731,16 @@ function LocalMemoBoard() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // 정렬 상태 안정화
         setTimeout(() => setNotes(parsed), 0);
       } catch (e) {
         console.error(e);
       }
     } else {
-      // 초기 데모 카드 2개 생성
+      // 초기 데모 카드 2개 생성 (텍스트는 암호화하여 저장)
       const initialNotes: Note[] = [
         {
           _id: "demo-1",
-          text: "밀어서 움직이고 내용을 적어보세요! (삭제 비번: 1234)",
+          text: encrypt("밀어서 움직이고 내용을 적어보세요! (삭제 비번: 1234)"),
           x: 1410,
           y: 910,
           color: "#fef08a",
@@ -707,7 +752,7 @@ function LocalMemoBoard() {
         },
         {
           _id: "demo-2",
-          text: "하트와 사과 같은 다양한 모양도 가능합니다! (삭제 비번: 1234)",
+          text: encrypt("하트와 사과 같은 다양한 모양도 가능합니다! (삭제 비번: 1234)"),
           x: 1610,
           y: 950,
           color: "#fecdd3",
@@ -741,7 +786,7 @@ function LocalMemoBoard() {
   ) => {
     const newNote: Note = {
       _id: `local-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      text,
+      text: encrypt(text), // 암호화하여 로컬 저장
       x,
       y,
       color,
@@ -757,23 +802,20 @@ function LocalMemoBoard() {
         fire: 0,
       }
     };
-    // 생성일자 기준 정렬을 보장하기 위해 새로운 메모는 맨 앞(또는 맨 뒤)에 배치
     saveToLocalStorage([newNote, ...notes]);
   };
 
   const handleUpdatePosition = (id: string, x: number, y: number) => {
     const updated = notes.map((note) =>
-      note._id === id ? { ...note, x, y } : note
+      note._id === id ? { ...note, x, y, isDraggingBy: undefined } : note
     );
     saveToLocalStorage(updated);
   };
 
   const handleDelete = (id: string, password?: string) => {
-    // Find the note
     const note = notes.find((n) => n._id === id);
     if (!note) return;
     
-    // Validate password
     if (note.password && note.password !== password) {
       alert("비밀번호가 일치하지 않습니다!");
       return;
@@ -806,6 +848,13 @@ function LocalMemoBoard() {
     saveToLocalStorage(updated);
   };
 
+  const handleUpdateDraggingState = (id: string, isDraggingBy?: string) => {
+    const updated = notes.map((note) =>
+      note._id === id ? { ...note, isDraggingBy } : note
+    );
+    setNotes(updated);
+  };
+
   return (
     <MemoBoardCanvas
       notes={notes}
@@ -814,6 +863,8 @@ function LocalMemoBoard() {
       onDelete={handleDelete}
       onReact={handleReact}
       isConvexConnected={false}
+      onUpdateDraggingState={handleUpdateDraggingState}
+      currentUser={currentUser}
     />
   );
 }

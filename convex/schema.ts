@@ -25,6 +25,7 @@ export default defineSchema({
       })
     ),
     password: v.optional(v.string()),
+    isDraggingBy: v.optional(v.string()),
   }).index("by_createdAt", ["createdAt"]),
 });
 

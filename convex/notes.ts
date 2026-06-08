@@ -52,7 +52,7 @@ export const create = mutation({
   },
 });
 
-// 메모 위치 실시간 변경
+// 메모 위치 실시간 변경 및 드래그 상태 해제
 export const updatePosition = mutation({
   args: {
     id: v.id("notes"),
@@ -63,6 +63,20 @@ export const updatePosition = mutation({
     await ctx.db.patch(args.id, {
       x: args.x,
       y: args.y,
+      isDraggingBy: undefined, // 드래그가 종료되었으므로 상태 초기화
+    });
+  },
+});
+
+// 드래그 상태 실시간 업데이트 (누가 건드리고 있는지 표시용)
+export const updateDraggingState = mutation({
+  args: {
+    id: v.id("notes"),
+    isDraggingBy: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      isDraggingBy: args.isDraggingBy,
     });
   },
 });
