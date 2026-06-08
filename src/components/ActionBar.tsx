@@ -2,14 +2,22 @@
 
 import React, { useState } from "react";
 import { FaPlus } from "react-icons/fa6";
+import { Download } from "lucide-react";
 
 interface ActionBarProps {
-  onAddNote: (shape: "square" | "circle" | "apple" | "heart", author: string, text: string) => void;
+  onAddNote: (shape: "square" | "circle" | "apple" | "heart", author: string, text: string, password?: string) => void;
+  onDownload?: () => void;
+  isDownloading?: boolean;
 }
 
-export default function ActionBar({ onAddNote }: ActionBarProps) {
+export default function ActionBar({ 
+  onAddNote, 
+  onDownload, 
+  isDownloading = false 
+}: ActionBarProps) {
   const [selectedShape, setSelectedShape] = useState<"square" | "circle" | "apple" | "heart">("square");
   const [text, setText] = useState("");
+  const [password, setPassword] = useState("");
   const [author, setAuthor] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("memo_author") || "익명";
@@ -31,8 +39,14 @@ export default function ActionBar({ onAddNote }: ActionBarProps) {
       alert("메모 내용을 입력해 주세요!");
       return;
     }
-    onAddNote(selectedShape, author.trim() || "익명", trimmedText);
+    const trimmedPassword = password.trim();
+    if (!trimmedPassword) {
+      alert("메모 삭제 시 사용할 비밀번호를 입력해 주세요!");
+      return;
+    }
+    onAddNote(selectedShape, author.trim() || "익명", trimmedText, trimmedPassword);
     setText(""); // 등록 후 메모 입력 필드 초기화
+    setPassword(""); // 등록 후 비밀번호 입력 필드 초기화
   };
 
   return (
@@ -48,6 +62,21 @@ export default function ActionBar({ onAddNote }: ActionBarProps) {
           placeholder="닉네임 입력"
           maxLength={10}
           className="bg-stone-50 border border-stone-200/85 rounded-xl px-3 py-1.5 text-stone-800 text-sm font-medium w-24 placeholder-stone-400 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/10 transition-all"
+        />
+      </div>
+
+      <div className="hidden sm:block w-px h-6 bg-stone-200" />
+
+      {/* 비밀번호 설정 영역 */}
+      <div className="flex items-center gap-2">
+        <span className="text-stone-500 text-xs font-semibold select-none">비밀번호:</span>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="비밀번호 (필수)"
+          maxLength={15}
+          className="bg-stone-50 border border-stone-200/85 rounded-xl px-3 py-1.5 text-stone-800 text-sm font-medium w-28 placeholder-stone-400 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/10 transition-all"
         />
       </div>
 
@@ -133,6 +162,27 @@ export default function ActionBar({ onAddNote }: ActionBarProps) {
       </div>
 
       <div className="hidden sm:block w-px h-6 bg-stone-200" />
+
+      {/* 이미지 저장 버튼 */}
+      {onDownload && (
+        <>
+          <button
+            onClick={onDownload}
+            disabled={isDownloading}
+            className={`flex items-center justify-center bg-stone-50 hover:bg-stone-100 text-stone-600 border border-stone-200 rounded-2xl p-2.5 shadow-3xs active:scale-95 transition-all cursor-pointer ${
+              isDownloading ? "opacity-50 cursor-not-allowed" : ""
+            }`}
+            title="칠판 이미지로 저장"
+          >
+            {isDownloading ? (
+              <div className="w-5 h-5 border-2 border-stone-500 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Download className="w-5 h-5" />
+            )}
+          </button>
+          <div className="hidden sm:block w-px h-6 bg-stone-200" />
+        </>
+      )}
 
       {/* 추가 버튼 (react-icons/fa6의 FaPlus 아이콘 전용 버튼으로 대체) */}
       <button
